@@ -1,0 +1,316 @@
+---
+title: "CS5801 Coursework SUBMISSION  File"
+author: "2449223"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+version: 1
+---
+
+# 0. Instructions 
+
+*1. Remove the (italicised) guidance text but keep the section headings.*  
+*2. Use the chunks of R code provided.*  
+
+*3. This .rmd needs to run end to end without errors*
+
+
+```{r}
+# Add code here to load all the required libraries with `library()`.  
+# Do not include any `install.package()` for any required packages in this rmd file.
+library(validate)
+library(tidyverse)
+library(Hmisc)
+library(dplyr)
+library(ggplot2)
+library(vcdExtra)
+```
+
+
+# 1. Organise and clean the data
+
+## 1.1 Subset the data into the specific dataset allocated
+ 
+*Use R code to correctly select the subset of data allocated. (5 marks)*  
+
+```{r}
+# Only change the value for SID 
+# Assign your student id into the variable SID, for example:
+SID <- 2449223                 # This is an example, replace 2101234 with your actual ID
+SIDoffset <- (SID %% 50) + 1    # Your SID mod 50 + 1
+
+load("student_data.Rda")
+# Now subset the student data set
+# Pick every 50th observation starting from your offset
+# Put into your data frame named mydf (you can rename it)
+mydf <- student_data_analysis[seq(from=SIDoffset,to=nrow(student_data_analysis),by=50),]
+```
+
+
+## 1.2 Data quality plan
+ 
+#### Step 1:
+
+With the usage of the head() function, I eyeballed the data to get information about the first six rows and columns.
+
+#### Step 2:
+
+Then, I checked the data types by using the str() function to see if my values are numerical or categorical.
+
+#### Step 3:
+
+To see more details about my data, I used the summary() function, which gives me information about the max, min, median, mean, and other details to help me. Also, with min and max, I can see the range of the data.
+
+#### Step 4:
+
+To avoid missing, NA data, and duplicates, I used the is.na() function and duplicated() to check the uniqueness and completeness of the data.
+
+#### Step 5:
+
+Lastly, to check the validity of the data, I used the validator() function to create some rules for specific columns to reveal errors, if there are any.
+
+These five steps give us validity, accuracy, completeness, and uniqueness to work with quality data. These steps are also mentioned by Shepperd (Lecture Week 5, 2024) to make our data qualitative.
+
+
+## 1.3 Data quality findings
+
+### Issue 1
+  First of all, I saw that there are some issues with the data while making rules in the previous chapter. The graphs helped identify where to look in the data, then I used the table() function to see the values that cause the issues. The first issue is in the commute_method column, where I found that there is a spelling issue with "car" and "Bicicle." The graph below indicates the errors, and the subset() method shows the specific columns and rows with issues in the data.
+```{r}
+comuuteError=validator(okcommute=is.element(commute_method, c("Car", "Bus","Other", "Walking","Bicycle"))) #making a rule
+commute.check=confront(mydf,comuuteError) # checking the rule
+subset(mydf, commute_method=="car" | commute_method=="Bicicle") #showing the error that occur in specific columns
+plot(commute.check, xlab="")
+```
+
+
+### Issue 2
+   The other issue seen in the data quality check was negative values in the entry_exam_mark column, which is specified in the metadata to be within the range of 0-100. Therefore, I used the table() method again to display the entire column, the subset() method to show specific rows with negative values, and a visualization to illustrate how many of these values are negative in the entire column.
+```{r}
+entryError=validator(okEntryExamMark=entry_exam_mark>=0)
+entryCheck=confront(mydf, entryError)
+subset(mydf, entry_exam_mark<=0)#showing the error that occur in specific columns
+plot(entryCheck, xlab="")
+```
+
+
+### Issue 3
+  The last issue observed was in the column of percentage_absence where there is some values that exceed the 100 percent which is in meta data specified in range of 0-100. For that reason used table() method to show whole column of data and used subset() method to show the specific columns that are affected from that issue, lastly used plot to show the failures.
+```{r}
+absenceError=validator(okpercentageabsence= percentage_absence >=0 & percentage_absence <=100)
+absenceCheck=confront(mydf, absenceError)
+subset(mydf,percentage_absence>100 | percentage_absence<0)#showing the error that occur in specific columns
+plot(absenceCheck, xlab="")
+```
+
+
+ 
+## 1.4 Data cleaning  
+
+### Addressing Issue 1
+  Firstly, used alteration method in here with usage of vectors, changed the spelling errors in the column of the commute_method. "car" values turned to in to "Car" and "Bicicle" values turned into "Bicycle",this will update the data to correct values and will get rid of the errors.
+```{r}
+# Replace values directly in the character vector
+mydf$commute_method[mydf$commute_method == "car"] <- "Car"
+mydf$commute_method[mydf$commute_method == "Bicicle"] <- "Bicycle"
+
+# Check the updated table
+table(mydf$commute_method)
+```
+
+
+### Addressing Issue 2
+  Secondly, there is negative values on entry_exam_mark to get rid of these values, used mutate() method. Mutate() method will give power to change values that are negative to median of the data, where median is calculated without negative values. This method gives opportunity make the data more accurate and valid. 
+```{r}
+mydf <- mydf %>%
+  mutate(
+    entry_exam_mark = ifelse(entry_exam_mark < 0, median(entry_exam_mark[entry_exam_mark >= 0], na.rm = TRUE), entry_exam_mark) # Checking if the exam mark negative if it is change the values with median of the set
+  )
+summary(mydf$entry_exam_mark)
+```
+
+
+### Addressing Issue 3
+  Lastly, again used mutate method in here to make errors in column of the percentage_absence valid. However, rather than median, used random values that are in the range of the data. This method makes the data more valid and less skewed compare to median method used before.
+```{r}
+mydf <- mydf %>%
+  mutate(
+    percentage_absence = ifelse(# Checking if the percentegae absence out of range if it is change the values with random number between 0 and 100
+      percentage_absence > 100, 
+      runif(
+        n = sum(percentage_absence > 100, na.rm = TRUE), 
+        min = min(percentage_absence[percentage_absence >= 0 & percentage_absence <= 100], na.rm = TRUE), 
+        max = max(percentage_absence[percentage_absence >= 0 & percentage_absence <= 100], na.rm = TRUE)
+      ),
+      percentage_absence
+    )
+  )
+summary(mydf$percentage_absence)
+```
+
+# 2. Exploratory Data Analysis (EDA)
+
+## 2.1 EDA plan
+
+#### Step 1:
+
+To explore the data, I am going to look at each column individually, then check if there is a correlation or a relationship between the explanatory and the dependent variables, which are grade_point and completed_extended_project.
+
+#### Step 2:
+
+For numerical columns like grade_point_average, percentage_absence, sat_score, and entry_exam_mark, I will use histograms to see their distribution. For categorical values like complete_extended_project, free_school_meals, month_of_birth, commute_method, and student_id, I will use bar plots to explore them.
+
+#### Step 3:
+
+To find the relationship between the independent numerical variables and completed_extended_project, firstly, I will convert the completed_extended_project to a factorial variable. Then, I will use box plots to visualize the relationships. For the categorical independent variables and completed_extended_project, I will use two-way tables and mosaic plots. To ensure the validity of our visualizations, I will use the chi-squared test and Fisher's test.
+
+#### Step 4:
+
+To find the relationship between the independent numerical variables and grade_point_average, I will use scatter plots. For the categorical values and grade_point_average, I will use box plots. In addition to these, I will use the correlation method between numerical independent variables to ensure that there is no multicollinearity.
+
+### Element 1
+
+The scatter plot of Grade Point Average vs. SAT Score confirms that there is a positive moderate correlation between GPA and SAT Score. This means that students with a higher grade point average may have a higher SAT Score, and this assumption could be a significant factor for modeling the grade point average. 
+```{r}
+mydf$completed.extended.project<-as.factor(mydf$completed.extended.project)
+plot(mydf$grade_point_average, mydf$sat_score, main="Grade Point Average Vs Sat Score", xlab ="Grade Point Average", ylab="Sat Score",)
+model <- lm(sat_score ~ grade_point_average, data = mydf)
+abline(model, col="blue")
+
+```
+
+### Element 2
+  The boxplot of %ABSENCE vs COMPLETED PROJECT - From the graph we can see that students who have lesser absencmay have finished the completed extended project, and students have more absence have not completing the project. This may show that attendance can be huge factor to complete extended project.
+```{r}
+ggplot(mydf, aes(x=completed.extended.project, y=percentage_absence)) + geom_boxplot() + ggtitle("Boxplot of %ABSENCE vs COMPLETED PROJECT") + theme_classic()+ ylab("%Absence")+xlab("COMPLETED PROJECT")
+```
+
+### Element 3
+  The boxplot of grade point average vs commute method - This also indicates that people who are using bus or walking are more likely to have higher gpa than other people who are using cars, bus and other methods. Also anova method we used is prove that commute method can be significant effect(by looking at the p value which is significant) on gpa modelling.
+```{r}
+ggplot(mydf, aes(y=grade_point_average, x=commute_method)) + geom_boxplot() + ggtitle("Boxplot of Commute vs GPA") + theme_classic()+ ylab("GPA")+xlab("Commute")
+summary(aov(mydf$grade_point_average~mydf$commute_method))
+```
+
+
+# 3. Modelling
+
+## 3.1 Explain your analysis
+
+#### Aim and Methods:
+The aim of the analysis is to model the dependent variable, Grade Point Average (GPA), using multiple linear regression. This method was selected because the dependent variable is numerical, and multiple linear regression allows us to evaluate the impact of multiple explanatory variables on GPA simultaneously.
+
+All explanatory variables were included initially in the maximal model, as there were no issues in the dataset such as missing, implausible, or suspicious values. The categorical variables (e.g., commute_method, free_school_meals, and month_of_birth) were converted to factors to ensure their correct representation in the model. An initial maximal model was created using all explanatory variables, and its results showed that sat_score and percentage_absence were highly significant predictors of GPA. However, many other variables were found to be non-significant, which could complicate interpretation and lead to a less efficient model.
+
+#### Model Selection:
+To address this, I used the stepwise selection method to refine the model. Stepwise selection iteratively removes non-significant variables based on statistical criteria, simplifying the model while retaining its predictive power. This approach resulted in a minimal adequate model that included only the significant variables: sat_score and percentage_absence.
+
+#### EDA Incorparation:
+The findings from the EDA were directly incorporated into the modeling process. For instance, the EDA revealed a strong positive correlation between GPA and SAT score and a negative relationship between GPA and percentage absence. These insights guided the interpretation of the refined model, which confirmed that higher SAT scores are associated with higher GPAs, while increased absenteeism has a detrimental impact.
+
+#### Addressing the weakness:
+Diagnostic plots for the refined model were examined to assess potential weaknesses. The residuals were randomly distributed around zero, indicating linearity, and the Q-Q plot confirmed the normality of residuals. The Scale-Location plot supported the assumption of constant variance, and the Residuals vs. Leverage plot showed no influential outliers. Thus, the model satisfies all key assumptions of multiple linear regression, with no evident weaknesses.
+
+#### Alternative Approaches:
+As an alternative approach, I considered including the squared terms of the explanatory variables to capture potential non-linear relationships and improve the R^2 value. However, this was deemed unnecessary, as the diagnostic checks confirmed the adequacy of the current model.
+
+
+## 3.2 Provide a model for Grade point average
+
+### Proposed model
+    The proposed model is a multiple linear regression with sat_score and percentage_absence as the explanatory variables. This model was selected after stepwise selection, which identified these two variables as the most significant predictors of GPA. The model demonstrates strong validity, with a r^2 value of 0.76, indicating that 76% of the variance in GPA is explained by these predictors.The coefficients show that higher SAT scores are positively associated with GPA, while increased absenteeism negatively impacts GPA.
+  
+
+```{r}
+model_step = lm(formula = grade_point_average ~ sat_score + percentage_absence, 
+    data = mydf) #using the model that is found by the step function
+summary(model_step)
+```
+$$ GPA= 0.9133877 + 0.0019226\times SatScore + (-0.0297117) \times PercentageAbsence $$
+
+### Proposed model diagnostics
+
+  From the plots we can see that:
+  
+  -QQplot -> showing some outliers and distribution of the model which are ok.
+  
+  -Residuals and Standard Residuals -> Showing us our variance nearly all the time consistent which means there is no heteroscedasticity. which is good.
+  
+```{r}
+plot(model_step)
+```
+
+
+  Diagnostic plots confirm that the model satisfies all key assumptions of linear regression, with no significant weaknesses identified. This minimal yet adequate model aligns with the findings from the exploratory data analysis and is both interpreteble and effective for explaining GPA.
+  
+### Proposed model intepretation
+
+```{r}
+#optional
+
+```
+
+
+# 4. Modelling another dependent variable
+
+## 4.1 Model the likelihood of completing an extended project (using the completed.extended.project variable provided).
+
+#### Aim and Methods: 
+  We find that our dependent variable which is completed.extended.project is binary. Therefore to explain the relationship between binary target variable and explanatory variables we are going to use logistic regression.
+  
+#### Model Selection:
+  I used stepwise selection, that strategy is starting with creating a maximal model, then with the usage of the step function reducing the non-significant variables from the model to find out best fit model for our dependent variable.
+#### EDA Incorparation:
+  In eda part we found that students who have higher absence percentage most likely have not completed the extended project, this is actually linked with the model we found, it says that one of the independent variables who have significant effect whether student completed the extended project or not, also odds showing the higher the absence lesser the completed project.
+  
+#### Addressing the weakness:
+  We found that there are some non-significant variables in our model which is one of the major weakness for us, these variables are entry_exam_mark, free_school_meals_YES, commute_method_BUS, commute_method_Walking. We could get rid of them to get better model and better results, this solution also can provide us better AIC which is lower the better, if we get rid of these values our AIC might get lower and our model fit better than before.
+  
+#### Alternative Approaches: 
+  One of the alternative method could be making interaction in the maximal model and finding out best model with the usage of the step function, it could make us better model. Other than that usage of the tree may show us the which variables are important for completing the extended project or not and it can show us the interactions.Which will give us a guide about what to remove before the usage of the step() function, after that we could get a better model with better and smaller AIC. 
+
+### Proposed Model
+
+```{r}
+step_max_completed_project.glm=glm(mydf$completed.extended.project ~ mydf$entry_exam_mark + 
+    mydf$sat_score + mydf$percentage_absence + mydf$free_school_meals + 
+    mydf$commute_method, family = "binomial")
+summary(step_max_completed_project.glm)
+```
+  
+  We found out that sat score, percentage absence, using Car and other commute methods are significant values that are effecting our dependent variable, also we saw that our minimal_adequate model have some non-significant values which can weaken our model.
+
+### Model intepretation
+```{r}
+exp(coef(step_max_completed_project.glm)) # looking at the odds
+```
+From the coefficients estimates we can see that:
+
+  -The higher entry exam mark lower the completed project.
+  
+  -People who get higher sat_score have also higher probability to completed the extended project.
+  
+  -Higher percentage of absence means that lower chance to completed the extended project
+  .
+  -People who are getting free school meals have higher chance to completed their extended project.
+  
+  -People who are using Car and other commuted methods have lower chance to complete extended project than people who are walking or using bus to come to school.
+  
+  In summary, we can say that people who completed their extended project get better sat score, better attendance points, getting free school meals and using bus or walking the school.
+  
+
+# References
+
+Shepperd, M. (2024) CS5702 Lecture 5: Data Quality, Cleaning and Imputation. Department of Computer Science, Brunel University London.
+
+Dantu, S. and Sassoon, I. (2024) CS5701 Lecture 6: Analysis of Variance. Department of Computer Science, Brunel University London.
+
+Sassoon, I. (2024) CS5701 Lecture 5: Correlation and Regression. Department of Computer Science, Brunel University London.
+
+Dantu, S. and Sassoon, I. (2024) CS5701 Lecture 7: Multiple Regression. Department of Computer Science, Brunel University London.
+
+Sassoon, I. (2024) CS5701 Lecture 8: Logistic Regression. Department of Computer Science, Brunel University London.
+
+  
